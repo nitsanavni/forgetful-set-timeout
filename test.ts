@@ -69,20 +69,20 @@ const atTimes = (map: { [time: number]: CB }): void => {
 };
 
 test.serial("more declarative", (t) => {
-    const cbs = times(3, () => spy());
+    const [cb1, cb2, cb3] = times(3, () => spy());
 
     atTimes({
         0: () => {
-            rememberingSetTimeout(cbs[0], 20);
-            rememberingSetTimeout(cbs[1], 30);
+            rememberingSetTimeout(cb1, 20);
+            rememberingSetTimeout(cb2, 30);
         },
         10: () => {
-            t.true(cbs[0].notCalled && cbs[1].notCalled);
-            rememberingSetTimeout(cbs[2], 15);
+            t.true(cb1.notCalled && cb2.notCalled);
+            rememberingSetTimeout(cb3, 15);
         },
-        20: () => t.true(cbs[0].called && cbs[1].notCalled && cbs[2].notCalled),
-        25: () => t.true(cbs[0].called && cbs[1].notCalled && cbs[2].called),
-        30: () => t.true(cbs[0].called && cbs[1].called && cbs[2].called),
+        20: () => t.true(cb1.called && cb2.notCalled && cb3.notCalled),
+        25: () => t.true(cb1.called && cb2.notCalled && cb3.called),
+        30: () => t.true(cb1.called && cb2.called && cb3.called),
     });
 });
 
