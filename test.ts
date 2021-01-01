@@ -71,8 +71,6 @@ const atTimes = (map: { [time: number]: CB }): void => {
 test.serial("more declarative", (t) => {
     const cbs = times(3, () => spy());
 
-    t.plan(4);
-
     atTimes({
         0: () => {
             rememberingSetTimeout(cbs[0], 20);
