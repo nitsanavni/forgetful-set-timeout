@@ -1,5 +1,5 @@
 import test from "ava";
-import { chain, each, fill, max, noop, reduce, times, toNumber } from "lodash";
+import { chain, each, max, noop, times, toNumber } from "lodash";
 import { useFakeTimers, spy } from "sinon";
 
 type CB = () => void;
