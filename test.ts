@@ -1,5 +1,5 @@
 import test from "ava";
-import { chain, each, fill, max, times, toNumber } from "lodash";
+import { chain, each, fill, max, noop, reduce, times, toNumber } from "lodash";
 import { useFakeTimers, spy } from "sinon";
 
 type CB = () => void;
@@ -48,6 +48,45 @@ const rememberingSetTimeout: SetTimeout = (() => {
         next();
     });
 })();
+
+const atTimes = (map: { [time: number]: CB }): void => {
+    const clock = useFakeTimers();
+
+    chain(map)
+        .entries()
+        .reduce(
+            ([previousTime], [time, op]) => {
+                clock.tick(+time - +previousTime);
+                op();
+
+                return [time, noop];
+            },
+            ["0", noop]
+        )
+        .value();
+
+    clock.uninstall();
+};
+
+test.serial("more declarative", (t) => {
+    const cbs = times(3, () => spy());
+
+    t.plan(4);
+
+    atTimes({
+        0: () => {
+            rememberingSetTimeout(cbs[0], 20);
+            rememberingSetTimeout(cbs[1], 30);
+        },
+        10: () => {
+            t.true(cbs[0].notCalled && cbs[1].notCalled);
+            rememberingSetTimeout(cbs[2], 15);
+        },
+        20: () => t.true(cbs[0].called && cbs[1].notCalled && cbs[2].notCalled),
+        25: () => t.true(cbs[0].called && cbs[1].notCalled && cbs[2].called),
+        30: () => t.true(cbs[0].called && cbs[1].called && cbs[2].called),
+    });
+});
 
 test.serial("multiple ticks", (t) => {
     const clock = useFakeTimers();
