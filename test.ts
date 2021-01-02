@@ -1,6 +1,17 @@
 import test from "ava";
-import { chain, each, max, noop, times, toNumber } from "lodash";
+import {
+    chain,
+    each,
+    isArray,
+    Many,
+    max,
+    noop,
+    reduce,
+    times,
+    toNumber,
+} from "lodash";
 import { useFakeTimers, spy } from "sinon";
+import * as fc from "fast-check";
 
 type CB = () => void;
 type SetTimeout = (cb: CB, ms: number) => void;
@@ -21,6 +32,8 @@ const rememberingSetTimeout: SetTimeout = (() => {
 
     return <SetTimeout>((cb, ms) => {
         const key = Date.now() + ms;
+
+        // console.log(key, ms);
 
         (map[key] ??= []).push(cb);
 
@@ -49,15 +62,20 @@ const rememberingSetTimeout: SetTimeout = (() => {
     });
 })();
 
-const atTimes = (map: { [time: number]: CB }): void => {
+const atTimes = (map: { [time: number]: Many<CB> }): void => {
     const clock = useFakeTimers();
+
+    // console.log(map);
 
     chain(map)
         .entries()
+        .sortBy(([time]) => +time)
         .reduce(
             ([previousTime], [time, op]) => {
                 clock.tick(+time - +previousTime);
-                op();
+                isArray(op)
+                    ? each(op, (o) => (o(), clock.tick(0)))
+                    : (op as CB)();
 
                 return [time, noop];
             },
@@ -67,6 +85,65 @@ const atTimes = (map: { [time: number]: CB }): void => {
 
     clock.uninstall();
 };
+
+test.serial("property based", (t) => {
+    t.notThrows(() =>
+        fc.assert(
+            fc.property(
+                fc.array(
+                    fc.tuple(
+                        fc.nat({ max: 200 }).map((n) => n + 10),
+                        fc.nat({ max: 200 }),
+                        fc.nat().map(() => spy())
+                    )
+                ),
+                (testers) => {
+                    // console.log(testers);
+                    let ret = true;
+                    atTimes(
+                        chain(testers)
+                            .reduce((acc, [at, timeout, s]) => {
+                                (acc[at] ??= []).push(() =>
+                                    rememberingSetTimeout(s, timeout)
+                                );
+                                (acc[at + timeout - 1] ??= []).push(
+                                    () =>
+                                        // t.true(s.notCalled)
+                                        (ret &&= s.notCalled)
+                                );
+                                (acc[at + timeout] ??= []).push(
+                                    () =>
+                                        // t.true(s.called)
+                                        (ret &&= s.called)
+                                );
+
+                                return acc;
+                            }, {} as { [at: number]: CB[] })
+                            .value()
+                    );
+                    return ret;
+                }
+            ),
+            { verbose: true }
+        )
+    );
+});
+
+test.serial("fast-check found issue - { timeout: 0 }", (t) => {
+    const clock = useFakeTimers();
+
+    const cb = spy();
+
+    rememberingSetTimeout(cb, 0);
+
+    t.true(cb.notCalled);
+
+    clock.tick(0);
+
+    t.true(cb.called);
+
+    clock.uninstall();
+});
 
 test.serial("more declarative", (t) => {
     const [cb1, cb2, cb3] = times(3, () => spy());
